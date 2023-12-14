@@ -1,0 +1,11 @@
+certifi==2023.11.17
+charset-normalizer==3.3.2
+future==0.18.3
+idna==3.6
+pefile==2021.9.3
+pewee==0.1.0.dev9
+pyTelegramBotAPI==4.14.0
+requests==2.31.0
+telebot==0.0.5
+telegram==0.0.1
+urllib3==2.1.0
