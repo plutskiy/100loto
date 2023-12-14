@@ -36,12 +36,13 @@ def create():
         json.dump(data, file)
 
 
-def get_channels() -> dict:
+def update() -> dict:
     with open('config.json', 'r', encoding='utf-8') as file:
         data = json.load(file)
-
-    return data['channel']
+    return data
 
 
 if not os.path.exists('config.json'):
     create()
+
+data = update()

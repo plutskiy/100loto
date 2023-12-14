@@ -13,7 +13,7 @@ def start(message):
     check = types.InlineKeyboardMarkup()
     button = types.InlineKeyboardButton(text="Проверить подписку", callback_data="check")
     check.add(button)
-    channels = create.channels_list(config.get_channels())
+    channels = create.channels_list(config.data['channel'])
     bot.send_message(message.chat.id,
                      f"Привет, {message.from_user.first_name}! Добро пожаловать в нашу лотерею", parse_mode='Markdown'
                      )

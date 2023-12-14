@@ -4,5 +4,4 @@ def channels_list(channels: dict) -> str:
     for channel in channels:
         text += f'{i}. <b>{channels[channel]}</b>: {channel}\n'
         i += 1
-    print(text)
     return text
