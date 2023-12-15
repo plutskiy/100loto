@@ -20,7 +20,7 @@ def create():
         'name': 'Валентин'
     })
 
-    data['channel']['@puton4ick'] = "Будка хлепла"
+    data['channel']['Будка хлепла'] = 'https://t.me/puton4ick'
 
     data['ticket'] = {
         'T': 1,
@@ -36,13 +36,14 @@ def create():
         json.dump(data, file)
 
 
-def update() -> dict:
+def update():
+    global data, admins_username, admins_id
     with open('config.json', 'r', encoding='utf-8') as file:
         data = json.load(file)
-    return data
 
 
 if not os.path.exists('config.json'):
     create()
 
-data = update()
+data = dict()
+update()
