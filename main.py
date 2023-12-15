@@ -41,9 +41,50 @@ def is_user_subscribed(user_id) -> bool:
         logging.error(e)
 
 
+@bot.message_handler(commands=['auth'])
+def auth(message: types.Message):
+    chat_id = message.chat.id
+    user_id = message.from_user.id
+    user_username = message.from_user.username
+    verification = config.is_admin(user_username, user_id)
+    if verification[0]:
+        params = list(message.text.split())
+        admin_info = config.get_admin_info(user_username, user_id)
+        print(params)
+        if '--help' in params:
+            bot.send_message(chat_id=chat_id,
+                             text=create.auth_info(),
+                             parse_mode='HTML')
+        else:
+            name = str()
+            if '-n' in params:
+                param_index = params.index('-n')
+                for i in range(param_index + 1, len(params)):
+                    name += f'{params[i]} '
+
+                if len(name) != 0:
+                    name = name[:-1]
+                    config.update_admin(user_username, user_id, name, admin_info[3])
+                    text = '<b>Успешно:</b> username, id и name обновлены'
+                else:
+                    text = '<b>Ошибка:</b> не указано имя после параметра -n)'
+
+            else:
+                config.update_admin(user_username, user_id, admin_info[2], admin_info[3])
+                text = '<b>Успешно:</b> username и id обновлены'
+
+            bot.send_message(chat_id=chat_id,
+                         text=text,
+                         parse_mode='HTML')
+@bot.message_handler(commands=['addAdmin'])
+def addAdmin(message: types.Message):
+    chat_id = message.chat.id
+    user_id = message.from_user.id
+
+
 @bot.message_handler(content_types=['text'])
 def text_process(message: telebot.types.Message):
-    print(message.html_text)
+    print(config.data)
 
 
 @bot.callback_query_handler(func=lambda call: True)
