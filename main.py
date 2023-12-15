@@ -3,6 +3,7 @@ import telebot
 from telebot import types
 import create
 import config
+import models
 
 TOKEN = '5973304457:AAHGtaBx2VladoA7yt1S5H3IV7KDJoVD7z4'
 bot = telebot.TeleBot(TOKEN)
@@ -10,6 +11,9 @@ bot = telebot.TeleBot(TOKEN)
 
 @bot.message_handler(commands=['start'])
 def start(message):
+    if models.User.select().where(models.User.user_id == message.from_user.id).exists():
+        bot.send_message(message.chat.id, "Вы уже участвуете в лотерее")
+        return
     check = types.InlineKeyboardMarkup()
     button = types.InlineKeyboardButton(text="Проверить подписку", callback_data="check")
     check.add(button)
@@ -43,11 +47,15 @@ def text_process(message: telebot.types.Message):
 
 
 @bot.callback_query_handler(func=lambda call: True)
-def callback_inline(call):
+def callback_inline(call: types.CallbackQuery):
     if call.data == "check":
         if is_user_subscribed(call.from_user.id) == True:
             # Написал, стартовое сообщение при /start, чуток говнокод, нужно будет дописать запись в бд
-            bot.send_message(call.message.chat.id, "Вы подписаны на канал")
+            models.db.connect()
+            models.User.create(user_id=call.from_user.id, nickname=call.from_user.username)
+            models.db.close()
+            bot.delete_message(chat_id=call.message.chat.id, message_id=call.message.id)
+            bot.send_message(call.message.chat.id, "Поздравляем! Вы стали участником лотереи!")
         else:
             bot.send_message(call.message.chat.id, "Подпишитесь на канал и попробуйте снова")
 
