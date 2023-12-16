@@ -8,12 +8,26 @@ import models
 TOKEN = '5973304457:AAHGtaBx2VladoA7yt1S5H3IV7KDJoVD7z4'
 bot = telebot.TeleBot(TOKEN)
 
+@bot.message_handler(commands=['ref'])
+def send_referral_link(message):
+    user_id = message.from_user.id
+    referral_link = f"https://t.me/test22832131bot?start={user_id}"
+    bot.send_message(user_id, f"Ваша реферальная ссылка: {referral_link}")
 
 @bot.message_handler(commands=['start'])
 def start(message):
-    if models.User.select().where(models.User.user_id == message.from_user.id).exists():
+    user_id = message.from_user.id
+    referral_id = message.text[7:]  # Получаем user_id реферера из команды /start
+
+    if models.User.select().where(models.User.user_id == user_id).exists():
         bot.send_message(message.chat.id, "Вы уже участвуете в лотерее")
         return
+    if referral_id != "":
+        if models.User.select().where(models.User.user_id == referral_id).exists():
+            models.Ref.create(invite_id=referral_id, join_id=user_id)
+        else:
+            bot.send_message(message.chat.id, "Вы ввели неверный реферальный код")
+            return
     check = types.InlineKeyboardMarkup()
     button = types.InlineKeyboardButton(text="Проверить подписку", callback_data="check")
     check.add(button)
@@ -74,17 +88,14 @@ def auth(message: types.Message):
                 text = '<b>Успешно:</b> username и id обновлены'
 
             bot.send_message(chat_id=chat_id,
-                         text=text,
-                         parse_mode='HTML')
+                             text=text,
+                             parse_mode='HTML')
+
+
 @bot.message_handler(commands=['addAdmin'])
 def addAdmin(message: types.Message):
     chat_id = message.chat.id
     user_id = message.from_user.id
-
-
-@bot.message_handler(content_types=['text'])
-def text_process(message: telebot.types.Message):
-    print(config.data)
 
 
 @bot.callback_query_handler(func=lambda call: True)
@@ -99,6 +110,53 @@ def callback_inline(call: types.CallbackQuery):
             bot.send_message(call.message.chat.id, "Поздравляем! Вы стали участником лотереи!")
         else:
             bot.send_message(call.message.chat.id, "Подпишитесь на канал и попробуйте снова")
+
+
+@bot.message_handler(func=lambda message: True)
+def count_messages(message):
+    user_id = message.from_user.id
+    if len(message.text.split()) >= 3:
+        models.db.connect()
+        if models.User.select().where(models.User.user_id == user_id).exists():
+            user = models.User.get(models.User.user_id == user_id)
+            user.tikets += 1
+            user.save()
+            ticket = models.Tickets.create(user=user)
+            print(f"Ticket {ticket.id} created for user {user_id}")
+            if models.Ref.select().where(models.Ref.join_id == user_id).exists():
+                ref = models.Ref.get(models.Ref.join_id == user_id)
+                if ref.msg_count + 1 == 5:
+                    # Получаем пользователя, который присоединился по реферальной ссылке
+                    joined_user = models.User.get(models.User.user_id == user_id)
+                    # Увеличиваем количество его билетов на 5
+                    joined_user.tikets += 5
+                    joined_user.save()
+
+                    # Создаем 5 билетов для этого пользователя
+                    for _ in range(5):
+                        models.Tickets.create(user=joined_user)
+
+                    # Отправляем сообщение пользователю о получении билетов
+                    bot.send_message(joined_user.user_id, "Поздравляем! Вы получили 5 билетов!")
+
+                    # Получаем пользователя, который поделился реферальной ссылкой
+                    invited_user = models.User.get(models.User.user_id == ref.invite_id)
+                    # Увеличиваем количество его билетов на 5
+                    invited_user.tikets += 5
+                    invited_user.save()
+
+                    # Создаем 5 билетов для этого пользователя
+                    for _ in range(5):
+                        models.Tickets.create(user=invited_user)
+
+                    # Отправляем сообщение пользователю о получении билетов
+                    bot.send_message(invited_user.user_id, "Поздравляем! Вы получили 5 билетов!")
+
+                    # Удаляем запись из таблицы Ref
+                    ref.delete_instance()
+                ref.msg_count += 1
+                ref.save()
+        models.db.close()
 
 
 bot.polling(none_stop=True)
