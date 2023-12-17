@@ -1,4 +1,7 @@
 import logging
+import random
+from peewee import *
+
 import telebot
 from telebot import types
 import create
@@ -8,7 +11,7 @@ import models
 TOKEN = '5973304457:AAHGtaBx2VladoA7yt1S5H3IV7KDJoVD7z4'
 bot = telebot.TeleBot(TOKEN)
 stop = True
-
+group_chats_ids = [-10021431471, -1002143147104]
 
 @bot.message_handler(commands=['ref'])
 def send_referral_link(message):
@@ -19,9 +22,15 @@ def send_referral_link(message):
 
 @bot.message_handler(commands=['start'])
 def start(message):
+    if message.chat.type != 'private':
+        return
+
     user_id = message.from_user.id
     referral_id = message.text[7:]  # Получаем user_id реферера из команды /start
 
+    if models.Ref.select().where(models.Ref.join_id == user_id).exists():
+        bot.send_message(message.chat.id, 'Вы уже присоеденились по реферальной ссылке')
+        return
     if models.User.select().where(models.User.user_id == user_id).exists():
         bot.send_message(message.chat.id, "Вы уже участвуете в лотерее")
         return
@@ -47,16 +56,20 @@ def start(message):
 
 @bot.message_handler(commands=['reset'])
 def drop(message):
+    if message.chat.type != 'private':
+        return
     user_id = message.from_user.id
     user_username = message.from_user.username
     verification = config.is_admin(user_username, user_id)
     if verification[0]:
         models.clear()
-        bot.send_message(message.chat.id, "Все пользователи были удалены")
+        bot.send_message(-1002143147104, "Лотерея была сброшена")
 
 
 @bot.message_handler(commands=['reset_tickets'])
 def drop(message):
+    if message.chat.type != 'private':
+        return
     user_id = message.from_user.id
     user_username = message.from_user.username
     verification = config.is_admin(user_username, user_id)
@@ -69,34 +82,41 @@ def drop(message):
             user.msg_count = 0
             user.save()
         models.db.drop_tables([models.Tickets])
+        models.db.create_tables([models.Tickets], safe=True)
         models.db.close()
         bot.send_message(message.chat.id, "Все билеты были удалены")
 
-
 @bot.message_handler(commands=['stop'])
 def stop(message):
+    if message.chat.type != 'private':
+        return
     global stop
     user_id = message.from_user.id
     user_username = message.from_user.username
     verification = config.is_admin(user_username, user_id)
     if verification[0]:
         stop = True
-        bot.send_message(message.chat.id, "Лотерея остановлена")
-
+        # for chat_id in group_chats_ids:
+        #     bot.send_message(chat_id, "Лотерея остановлена")
 
 @bot.message_handler(commands=['start_lottery'])
 def start(message):
+    if message.chat.type != 'private':
+        return
     global stop
     user_id = message.from_user.id
     user_username = message.from_user.username
     verification = config.is_admin(user_username, user_id)
     if verification[0]:
         stop = False
-        bot.send_message(message.chat.id, "Лотерея запущена")
+        # for chat_id in group_chats_ids:
+        #     bot.send_message(chat_id, "Лотерея запущена")
 
 
 @bot.message_handler(commands=['tickets'])
 def tickets(message):
+    if message.chat.type != 'private':
+        return
     user_id = message.from_user.id
     user_username = message.from_user.username
     verification = config.is_admin(user_username, user_id)
@@ -105,22 +125,25 @@ def tickets(message):
         if len(params) == 2:
             try:
                 models.db.connect()
-                user = models.User.get(models.User.user_id == params[1])
+                user = models.User.get(models.User.nickname == params[1])
                 bot.send_message(message.chat.id, f"У пользователя {params[1]} {user.tikets} билетов")
                 models.db.close()
             except:
                 bot.send_message(message.chat.id, "Пользователь не найден")
         else:
             bot.send_message(message.chat.id, "Неверный формат команды")
-    else:
+    elif models.User.select().where(models.User.user_id == user_id).exists():
         models.db.connect()
         user = models.User.get(models.User.user_id == user_id)
         bot.send_message(message.chat.id, f"У Вас {user.tikets} билетов")
         models.db.close()
-
+    elif not models.User.select().where(models.User.user_id == user_id).exists():
+        bot.send_message(message.chat.id, "Вы не участвуете в лотерее")
 
 @bot.message_handler(commands=['delete'])
 def delete(message):
+    if message.chat.type != 'private':
+        return
     user_id = message.from_user.id
     user_username = message.from_user.username
     verification = config.is_admin(user_username, user_id)
@@ -129,17 +152,55 @@ def delete(message):
         if len(params) == 2:
             try:
                 models.db.connect()
-                user = models.User.get(models.User.nickname == params[1])
-                bot.send_message(user.user_id, "Ваш аккаунт был удален")
-                models.Tickets.delete().where(models.Tickets.user == user).execute()
-                models.Ref.delete().where((models.Ref.invite_id == user) | (models.Ref.join_id == user)).execute()
-                user.delete_instance()
+                user_to_delete = models.User.get(models.User.nickname == params[1])
+                user_to_delete.delete_instance(recursive=True)
+
+                # Create a temporary table
+                models.db.execute_sql('CREATE TABLE temp AS SELECT * FROM tickets')
+
+                # Delete the original table
+                models.db.execute_sql('DROP TABLE tickets')
+
+                # Recreate the original table without data
+                models.Tickets.create_table()
+
+                # Copy the data from the temporary table to the original table
+                # The ticket_id will be reassigned automatically in ascending order
+                models.db.execute_sql('INSERT INTO tickets SELECT * FROM temp')
+
+                # Delete the temporary table
+                models.db.execute_sql('DROP TABLE temp')
+
                 models.db.close()
                 bot.send_message(message.chat.id, f"Пользователь {params[1]} был удален")
+                bot.send_message(user_to_delete.user_id, f"Вы удалены из лотереи")
             except:
                 bot.send_message(message.chat.id, "Пользователь не найден")
         else:
             bot.send_message(message.chat.id, "Неверный формат команды")
+
+
+@bot.message_handler(commands=['lottery'])
+def lottery(message):
+    if message.chat.type != 'private':
+        return
+    user_id = message.from_user.id
+    user_username = message.from_user.username
+    verification = config.is_admin(user_username, user_id)
+    if verification[0]:
+        models.db.connect()
+        total_tickets = models.Tickets.select().count()
+        winners = set()
+        while len(winners) < 2:
+            ticket_number = random.randint(1, total_tickets)
+            winners.add(ticket_number)
+        winner_tickets = [models.Tickets.get(models.Tickets.id == winner) for winner in winners]
+        winner_users = [ticket.user for ticket in winner_tickets]
+        winner_usernames = [user.nickname for user in winner_users]
+        bot.send_message(message.chat.id, f"The winners are: {', '.join(winner_usernames)}")
+        models.db.close()
+    else:
+        bot.send_message(message.chat.id, "You do not have permission to execute this command.")
 
 
 def is_user_subscribed(user_id) -> bool:
@@ -147,7 +208,6 @@ def is_user_subscribed(user_id) -> bool:
     try:
         chat_member = bot.get_chat_member(channel_username, user_id)
         if chat_member.status == 'member' or chat_member.status == 'administrator' or chat_member.status == 'creator':
-            print(chat_member.user.first_name)
             return True
         else:
             return False
@@ -157,6 +217,8 @@ def is_user_subscribed(user_id) -> bool:
 
 @bot.message_handler(commands=['auth'])
 def auth(message: types.Message):
+    if message.chat.type != 'private':
+        return
     chat_id = message.chat.id
     user_id = message.from_user.id
     user_username = message.from_user.username
@@ -194,6 +256,8 @@ def auth(message: types.Message):
 
 @bot.message_handler(commands=['addAdmin'])
 def addAdmin(message: types.Message):
+    if message.chat.type != 'private':
+        return
     chat_id = message.chat.id
     user_id = message.from_user.id
     user_username = message.from_user.username
@@ -210,7 +274,6 @@ def addAdmin(message: types.Message):
                                  text='<b>Ошибка:</b> username введен некорректно или отсутствует',
                                  parse_mode='HTML')
             else:
-                print(parts)
                 params = ['-n', '-m']
                 name = ''
                 is_main = False
@@ -254,6 +317,8 @@ def addAdmin(message: types.Message):
 
 @bot.message_handler(commands=['delAdmin'])
 def delAdmin(message: types.Message):
+    if message.chat.type != 'private':
+        return
     chat_id = message.chat.id
     user_id = message.from_user.id
     user_username = message.from_user.username
@@ -286,21 +351,27 @@ def delAdmin(message: types.Message):
 @bot.callback_query_handler(func=lambda call: True)
 def callback_inline(call: types.CallbackQuery):
     if call.data == "check":
-        if is_user_subscribed(call.from_user.id) == True:
-            # Написал, стартовое сообщение при /start, чуток говнокод, нужно будет дописать запись в бд
-            models.db.connect()
-            models.User.create(user_id=call.from_user.id, nickname=call.from_user.username)
-            models.db.close()
-            bot.delete_message(chat_id=call.message.chat.id, message_id=call.message.id)
-            bot.send_message(call.message.chat.id, "Поздравляем! Вы стали участником лотереи!")
-        else:
-            bot.send_message(call.message.chat.id, "Подпишитесь на канал и попробуйте снова")
+        if not models.User.select().where(models.User.user_id == call.from_user.id).exists():
+            if is_user_subscribed(call.from_user.id) == True:
+                try:
+                    models.db.connect()
+                    models.User.create(user_id=call.from_user.id, nickname=call.from_user.username)
+                    models.db.close()
+                    bot.delete_message(chat_id=call.message.chat.id, message_id=call.message.id)
+                    bot.send_message(call.message.chat.id, "Поздравляем! Вы стали участником лотереи!")
+                except:
+                    print("Юзер еблан, пускай на кнопку не спамит")
+            else:
+                bot.send_message(call.message.chat.id, "Подпишитесь на канал и попробуйте снова")
 
 
 @bot.message_handler(func=lambda message: True)
-def count_messages(message):
+def count_messages(message : types.Message):
+    # if message.chat.type != 'public':
+    #     return
     global stop
     user_id = message.from_user.id
+    print(message.chat.id)
     if not stop:
         if len(message.text.split()) >= 3:
             models.db.connect()
@@ -335,6 +406,5 @@ def count_messages(message):
                     ref.msg_count += 1
                     ref.save()
             models.db.close()
-
 
 bot.polling(none_stop=True)
