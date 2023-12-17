@@ -29,6 +29,12 @@ class Ref(Model):
     class Meta:
         database = SqliteDatabase('users.sqlite')
 
+def clear():
+    db.connect()
+    db.drop_tables([Ref, User, Tickets], safe=True)
+    db.create_tables([Ref], safe=True)
+    db.create_tables([Tickets], safe=True)
+    db.create_tables([User], safe=True)
 
 db.connect()
 # db.drop_tables([Ref, User, Tickets], safe=True)
