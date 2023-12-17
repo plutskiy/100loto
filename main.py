@@ -9,11 +9,13 @@ TOKEN = '5973304457:AAHGtaBx2VladoA7yt1S5H3IV7KDJoVD7z4'
 bot = telebot.TeleBot(TOKEN)
 stop = True
 
+
 @bot.message_handler(commands=['ref'])
 def send_referral_link(message):
     user_id = message.from_user.id
     referral_link = f"https://t.me/test22832131bot?start={user_id}"
     bot.send_message(user_id, f"Ваша реферальная ссылка: {referral_link}")
+
 
 @bot.message_handler(commands=['start'])
 def start(message):
@@ -42,6 +44,7 @@ def start(message):
                      reply_markup=check
                      )
 
+
 @bot.message_handler(commands=['reset'])
 def drop(message):
     user_id = message.from_user.id
@@ -69,6 +72,7 @@ def drop(message):
         models.db.close()
         bot.send_message(message.chat.id, "Все билеты были удалены")
 
+
 @bot.message_handler(commands=['stop'])
 def stop(message):
     global stop
@@ -79,6 +83,7 @@ def stop(message):
         stop = True
         bot.send_message(message.chat.id, "Лотерея остановлена")
 
+
 @bot.message_handler(commands=['start_lottery'])
 def start(message):
     global stop
@@ -88,6 +93,7 @@ def start(message):
     if verification[0]:
         stop = False
         bot.send_message(message.chat.id, "Лотерея запущена")
+
 
 @bot.message_handler(commands=['tickets'])
 def tickets(message):
@@ -112,6 +118,7 @@ def tickets(message):
         bot.send_message(message.chat.id, f"У Вас {user.tikets} билетов")
         models.db.close()
 
+
 @bot.message_handler(commands=['delete'])
 def delete(message):
     user_id = message.from_user.id
@@ -120,19 +127,20 @@ def delete(message):
     if verification[0]:
         params = list(message.text.split())
         if len(params) == 2:
-                try:
-                    models.db.connect()
-                    user = models.User.get(models.User.nickname == params[1])
-                    bot.send_message(user.user_id, "Ваш аккаунт был удален")
-                    models.Tickets.delete().where(models.Tickets.user == user).execute()
-                    models.Ref.delete().where((models.Ref.invite_id == user) | (models.Ref.join_id == user)).execute()
-                    user.delete_instance()
-                    models.db.close()
-                    bot.send_message(message.chat.id, f"Пользователь {params[1]} был удален")
-                except:
-                    bot.send_message(message.chat.id, "Пользователь не найден")
+            try:
+                models.db.connect()
+                user = models.User.get(models.User.nickname == params[1])
+                bot.send_message(user.user_id, "Ваш аккаунт был удален")
+                models.Tickets.delete().where(models.Tickets.user == user).execute()
+                models.Ref.delete().where((models.Ref.invite_id == user) | (models.Ref.join_id == user)).execute()
+                user.delete_instance()
+                models.db.close()
+                bot.send_message(message.chat.id, f"Пользователь {params[1]} был удален")
+            except:
+                bot.send_message(message.chat.id, "Пользователь не найден")
         else:
             bot.send_message(message.chat.id, "Неверный формат команды")
+
 
 def is_user_subscribed(user_id) -> bool:
     channel_username = "@puton4ick"
@@ -173,7 +181,7 @@ def auth(message: types.Message):
                     config.update_admin(user_username, user_id, name, admin_info[3])
                     text = '<b>Успешно:</b> username, id и name обновлены'
                 else:
-                    text = '<b>Ошибка:</b> не указано имя после параметра -n)'
+                    text = '<b>Ошибка:</b> не указано имя после флага -n'
 
             else:
                 config.update_admin(user_username, user_id, admin_info[2], admin_info[3])
@@ -188,6 +196,91 @@ def auth(message: types.Message):
 def addAdmin(message: types.Message):
     chat_id = message.chat.id
     user_id = message.from_user.id
+    user_username = message.from_user.username
+    verification = config.is_admin(user_username, user_id)
+    if verification[0] and verification[3]:
+        parts = list(message.text.split())[1:]
+        if '--help' in parts or not parts:
+            bot.send_message(chat_id=chat_id,
+                             text=create.addAdmin_info(),
+                             parse_mode='HTML')
+        elif parts:
+            if parts[0][0] != '@':
+                bot.send_message(chat_id=chat_id,
+                                 text='<b>Ошибка:</b> username введен некорректно или отсутствует',
+                                 parse_mode='HTML')
+            else:
+                print(parts)
+                params = ['-n', '-m']
+                name = ''
+                is_main = False
+
+                if '-m' in parts:
+                    is_main = True
+
+                if '-n' in parts:
+                    param_index = parts.index('-n')
+                    for i in range(param_index + 1, len(parts)):
+                        if parts[i] in params:
+                            break
+                        name += f'{parts[i]} '
+
+                if len(name) == 0 and '-n' in parts:
+                    bot.send_message(chat_id=chat_id,
+                                     text='<b>Ошибка:</b> не указано имя после флага -n',
+                                     parse_mode='HTML')
+                else:
+                    if len(name) != 0:
+                        name = name[:-1]
+                    else:
+                        name = 'admin'
+                    username = parts[0][1:]
+                    is_added = config.add_admin(username, name, is_main)
+
+                    if is_added:
+                        bot.send_message(chat_id=chat_id,
+                                         text=create.add_admin_text(username, name, is_main),
+                                         parse_mode='HTML')
+                    else:
+                        bot.send_message(chat_id=chat_id,
+                                         text=f'<b>Администратор</b> @{username} <b>уже записан в системе</b>',
+                                         parse_mode='HTML')
+
+    elif verification[0]:
+        bot.send_message(chat_id=chat_id,
+                         text='<b>permission denied</b>',
+                         parse_mode='HTML')
+
+
+@bot.message_handler(commands=['delAdmin'])
+def delAdmin(message: types.Message):
+    chat_id = message.chat.id
+    user_id = message.from_user.id
+    user_username = message.from_user.username
+    verification = config.is_admin(user_username, user_id)
+    if verification[0] and verification[3]:
+        admins = list(message.text.split())[1:]
+        if '--help' in admins or not admins:
+            bot.send_message(chat_id=chat_id,
+                             text=create.delAdmin_info(),
+                             parse_mode='HTML')
+        elif admins:
+            for admin in admins:
+                admin_info = config.get_admin_info(admin[1:], -2)
+                is_deleted = config.del_admin(admin[1:])
+
+                if is_deleted:
+                    bot.send_message(chat_id=chat_id,
+                                     text=create.del_admin_text(admin_info),
+                                     parse_mode='HTML')
+                else:
+                    bot.send_message(chat_id=chat_id,
+                                     text=f'<b>Пользователь</b> {admin} <b>не является администратором</b>',
+                                     parse_mode='HTML')
+    elif verification[0]:
+        bot.send_message(chat_id=chat_id,
+                         text='<b>permission denied</b>',
+                         parse_mode='HTML')
 
 
 @bot.callback_query_handler(func=lambda call: True)

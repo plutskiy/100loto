@@ -12,7 +12,7 @@ def create():
         'username': 'pluton4ick',
         'id': -1,
         'name': 'Платон',
-        'main': True
+        'main': False
     })
 
     tmp_data['admin'].append({
@@ -38,7 +38,7 @@ def create():
         json.dump(tmp_data, file)
 
 
-def load():
+def dump():
     with open('config.json', 'w', encoding='utf-8') as file:
         json.dump(data, file)
 
@@ -49,19 +49,32 @@ def update():
         data = json.load(file)
 
 
-def add_admin(username: str, name: str, main: bool):
-    data['admin'].append({
-        'username': username,
-        'id': -1,
-        'name': name,
-        'main': main
-    })
-    load()
+def add_admin(username: str, name: str, main: bool) -> bool:
+    for admin in data['admin']:
+        if admin['username'] == username:
+            return False
+    else:
+        data['admin'].append({
+            'username': username,
+            'id': -1,
+            'name': name,
+            'main': main
+        })
+        dump()
+        return True
+
+
+def del_admin(username: str) -> bool:
+    for i in range(len(data['admin'])):
+        if data['admin'][i]['username'] == username:
+            data['admin'].pop(i)
+            dump()
+            return True
+    return False
 
 
 def get_admin_info(username: str, id: int) -> tuple[str, int, str, bool]:
-    admins: list = data['admin']
-    for admin in admins:
+    for admin in data['admin']:
         if admin['username'] == username or admin['id'] == id:
             return admin['username'], admin['id'], admin['name'], admin['main']
 
@@ -91,7 +104,7 @@ def update_admin(username: str, id: int, name: str, main: bool):
             admin['id'] = id
         admin['name'] = name
         admin['main'] = main
-        load()
+        dump()
 
 
 if not os.path.exists('config.json'):
