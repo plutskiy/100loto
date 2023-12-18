@@ -40,7 +40,25 @@ def clear():
     db.close()
 
 db.connect()
-# db.drop_tables([Ref, User, Tickets], safe=True)
-db.create_tables([Ref], safe=True)
-db.create_tables([Tickets], safe=True)
-db.create_tables([User], safe=True)
+# # db.drop_tables([Ref, User, Tickets], safe=True)
+# db.create_tables([Ref], safe=True)
+# db.create_tables([Tickets], safe=True)
+# db.create_tables([User], safe=True)
+from peewee import fn
+
+tickets = Tickets.select().order_by(Tickets.id)
+# Собрать данные билетов в список
+tickets_data = []
+for ticket in tickets:
+    ticket_data = ticket.__data__.copy()
+    del ticket_data['id']
+    tickets_data.append(ticket_data)
+
+# Удалить все билеты
+Tickets.delete().execute()
+
+# Начать транзакцию
+with db.atomic():
+    for i, ticket_data in enumerate(tickets_data, start=1):
+        # Создать новый билет с новым ID
+        Tickets.create(id=i, **ticket_data)
