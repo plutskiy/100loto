@@ -13,6 +13,12 @@ bot = telebot.TeleBot(TOKEN)
 stop = True
 group_chats_ids = [-1002143147104]
 
+def user_keyboard():
+    keyboard = types.InlineKeyboardMarkup()
+    keyboard.add(types.InlineKeyboardButton(text="Билеты", callback_data="tickets"))
+    keyboard.add(types.InlineKeyboardButton(text="Реферальная ссылка", callback_data="ref"))
+    keyboard.add(types.InlineKeyboardButton(text="ТОП 10 участников", callback_data="top"))
+    return keyboard
 
 @bot.message_handler(commands=['ref'])
 def send_referral_link(message):
@@ -27,7 +33,7 @@ def start(message):
         return
 
     user_id = message.from_user.id
-    referral_id = message.text[7:]  # Получаем user_id реферера из команды /start
+    referral_id = message.text[7:]
 
     if models.Ref.select().where(models.Ref.join_id == user_id).exists():
         bot.send_message(message.chat.id, 'Вы уже присоеденились по реферальной ссылке')
@@ -356,12 +362,27 @@ def callback_inline(call: types.CallbackQuery):
                     models.User.create(user_id=call.from_user.id, nickname=call.from_user.username)
                     models.db.close()
                     bot.delete_message(chat_id=call.message.chat.id, message_id=call.message.id)
-                    bot.send_message(call.message.chat.id, "Поздравляем! Вы стали участником лотереи!")
+                    bot.send_message(call.message.chat.id, "Поздравляем! Вы стали участником лотереи!", reply_markup=user_keyboard())
                 except:
                     print("Юзер еблан, пускай на кнопку не спамит")
             else:
                 bot.send_message(call.message.chat.id, "Подпишитесь на канал и попробуйте снова")
-
+    elif call.data == "tickets":
+        models.db.connect()
+        user = models.User.get(models.User.user_id == call.from_user.id)
+        bot.send_message(call.message.chat.id, f"У Вас {user.tikets} билетов")
+        models.db.close()
+    elif call.data == "ref":
+        referral_link = f"https://t.me/test22832131bot?start={call.from_user.id}"
+        bot.send_message(call.message.chat.id, f"Ваша реферальная ссылка: {referral_link}")
+    elif call.data == "top":
+        models.db.connect()
+        top = models.User.select().order_by(models.User.tikets.desc()).limit(10)
+        text = "ТОП 10 участников:\n"
+        for user in top:
+            text += f"@{user.nickname} - {user.tikets}\n"
+        bot.send_message(call.message.chat.id, text)
+        models.db.close()
 
 @bot.message_handler(func=lambda message: True)
 def count_messages(message: types.Message):
