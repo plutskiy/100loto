@@ -12,6 +12,9 @@ TOKEN = '5973304457:AAHGtaBx2VladoA7yt1S5H3IV7KDJoVD7z4'
 bot = telebot.TeleBot(TOKEN)
 stop = True
 group_chats_ids = [-1002143147104]
+models.db.create_tables([models.Ref], safe=True)
+models.db.create_tables([models.Tickets], safe=True)
+models.db.create_tables([models.User], safe=True)
 
 def user_keyboard():
     keyboard = types.InlineKeyboardMarkup()

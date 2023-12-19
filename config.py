@@ -25,13 +25,13 @@ def create():
     tmp_data['channel']['Будка хлепла'] = 'puton4ick'
 
     tmp_data['ticket'] = {
-        'T': 1,
-        "Z": 1
+        'per_msg': 1,
+        "ref_msg": 1
     }
 
     tmp_data['message'] = {
-        'X': 10,
-        'Y': 10
+        'needed_msg': 10,
+        'ref_msg': 10
     }
 
     with open('config.json', 'w', encoding='utf-8') as file:
