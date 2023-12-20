@@ -7,6 +7,17 @@ def channels_list(channels: dict) -> str:
     return text
 
 
+def help_info() -> str:
+    text = '<b>Админские команды:</b>\n\n'
+    text += 'Настройки конфига:\n'
+    text += '<b>/auth</b>\n'
+    text += '<b>/addAdmin</b>\n'
+    text += '<b>/delAdmin</b>\n'
+    text += 'Для получения подробной информации о команде "/command" используйте параметр --help:\n'
+    text += 'Пример:\n'
+    text += '/auth --help\n'
+    return text
+
 def auth_info() -> str:
     text = 'Функция /auth обновляет Ваши id и username в системе, если они изменились или отсутствуют.\n\n'
     text += 'Флаги: \n'

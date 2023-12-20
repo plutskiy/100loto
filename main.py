@@ -226,6 +226,20 @@ def is_user_subscribed(user_id) -> bool:
         logging.error(e)
 
 
+@bot.message_handler(commands=['help'])
+def help(message: types.Message):
+    if message.chat.type != 'private':
+        return
+    chat_id = message.chat.id
+    user_id = message.from_user.id
+    user_username = message.from_user.username
+    verification = config.is_admin(user_username, user_id)
+    if verification[0]:
+        bot.send_message(chat_id=chat_id,
+                         text=create.help_info(),
+                         parse_mode='HTML')
+
+
 @bot.message_handler(commands=['auth'])
 def auth(message: types.Message):
     if message.chat.type != 'private':
