@@ -107,6 +107,16 @@ def update_admin(username: str, id: int, name: str, main: bool):
         dump()
 
 
+def set_admin(username: str, name: str, main: bool) -> bool:
+    for admin in data['admin']:
+        if admin['username'] == username:
+            admin['name'] = name
+            admin['main'] = main
+            dump()
+            return True
+    return False
+
+
 if not os.path.exists('config.json'):
     create()
 

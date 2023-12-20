@@ -5,6 +5,7 @@ from peewee import *
 import telebot
 from telebot import types
 import create
+import check
 import config
 import models
 
@@ -16,12 +17,14 @@ models.db.create_tables([models.Ref], safe=True)
 models.db.create_tables([models.Tickets], safe=True)
 models.db.create_tables([models.User], safe=True)
 
+
 def user_keyboard():
     keyboard = types.InlineKeyboardMarkup()
     keyboard.add(types.InlineKeyboardButton(text="Билеты", callback_data="tickets"))
     keyboard.add(types.InlineKeyboardButton(text="Реферальная ссылка", callback_data="ref"))
     keyboard.add(types.InlineKeyboardButton(text="ТОП 10 участников", callback_data="top"))
     return keyboard
+
 
 @bot.message_handler(commands=['ref'])
 def send_referral_link(message):
@@ -42,7 +45,7 @@ def start(message):
         bot.send_message(message.chat.id, 'Вы уже присоеденились по реферальной ссылке')
         return
     if models.User.select().where(models.User.user_id == user_id).exists():
-        bot.send_message(message.chat.id, "Вы уже участвуете в лотерее")
+        bot.send_message(message.chat.id, "[      Меню      ]", reply_markup=user_keyboard())
         return
     if referral_id != "":
         if models.User.select().where(models.User.user_id == referral_id).exists():
@@ -210,6 +213,7 @@ def lottery(message):
         for chats in group_chats_ids:
             bot.send_message(chats, f"Победители лотереи: @{winners_text}")
 
+
 def is_user_subscribed(user_id) -> bool:
     channel_username = "@puton4ick"
     try:
@@ -276,12 +280,14 @@ def addAdmin(message: types.Message):
                              text=create.addAdmin_info(),
                              parse_mode='HTML')
         elif parts:
-            if parts[0][0] != '@':
+            correct_username = check.check_telegram_link(parts[0])
+            if not correct_username[0]:
                 bot.send_message(chat_id=chat_id,
-                                 text='<b>Ошибка:</b> username введен некорректно или отсутствует',
+                                 text='<b>Ошибка:</b> username введен некорректно или отсутствует.\nИспользуйте /addAdmin --help</b>',
                                  parse_mode='HTML')
             else:
-                params = ['-n', '-m']
+                parts[0] = correct_username[1]
+                params = ['-n', '-m', '-s']
                 name = ''
                 is_main = False
 
@@ -295,7 +301,7 @@ def addAdmin(message: types.Message):
                             break
                         name += f'{parts[i]} '
 
-                if len(name) == 0 and '-n' in parts:
+                if len(name) == 0 and '-n' in parts and not ('-s' in parts):
                     bot.send_message(chat_id=chat_id,
                                      text='<b>Ошибка:</b> не указано имя после флага -n',
                                      parse_mode='HTML')
@@ -304,17 +310,34 @@ def addAdmin(message: types.Message):
                         name = name[:-1]
                     else:
                         name = 'admin'
-                    username = parts[0][1:]
-                    is_added = config.add_admin(username, name, is_main)
+                    username = parts[0]
 
-                    if is_added:
+                    if '-s' in parts:
+                        is_s_par = True
+                        is_added = False
+                        is_setted = config.set_admin(username, name, is_main)
+                    else:
+                        is_s_par = False
+                        is_added = config.add_admin(username, name, is_main)
+                        is_setted = False
+
+                    if is_s_par and is_setted:
+                        bot.send_message(chat_id=chat_id,
+                                         text=create.set_admin_text(username, name, is_main),
+                                         parse_mode='HTML')
+                    elif is_s_par and not is_setted:
+                        bot.send_message(chat_id=chat_id,
+                                         text=f'<b>Ошибка</b>: Пользователь @{username} не является администратором',
+                                         parse_mode='HTML')
+                    elif not is_s_par and is_added:
                         bot.send_message(chat_id=chat_id,
                                          text=create.add_admin_text(username, name, is_main),
                                          parse_mode='HTML')
-                    else:
+                    elif not is_s_par and not is_added:
                         bot.send_message(chat_id=chat_id,
-                                         text=f'<b>Администратор</b> @{username} <b>уже записан в системе</b>',
+                                         text=f'<b>Ошибка</b>: Администратор @{username} уже записан в системе',
                                          parse_mode='HTML')
+
 
     elif verification[0]:
         bot.send_message(chat_id=chat_id,
@@ -338,17 +361,23 @@ def delAdmin(message: types.Message):
                              parse_mode='HTML')
         elif admins:
             for admin in admins:
-                admin_info = config.get_admin_info(admin[1:], -2)
-                is_deleted = config.del_admin(admin[1:])
-
-                if is_deleted:
-                    bot.send_message(chat_id=chat_id,
-                                     text=create.del_admin_text(admin_info),
-                                     parse_mode='HTML')
+                correct_username = check.check_telegram_link(admin)
+                admin_info = config.get_admin_info(correct_username[1], -2)
+                is_deleted = config.del_admin(correct_username[1])
+                if correct_username[0]:
+                    if is_deleted:
+                        bot.send_message(chat_id=chat_id,
+                                         text=create.del_admin_text(admin_info),
+                                         parse_mode='HTML')
+                    else:
+                        bot.send_message(chat_id=chat_id,
+                                         text=f'<b>Ошибка</b>: Пользователь {admin} не является администратором',
+                                         parse_mode='HTML')
                 else:
                     bot.send_message(chat_id=chat_id,
-                                     text=f'<b>Пользователь</b> {admin} <b>не является администратором</b>',
+                                     text=f'<b>Ошибка</b>: username {correct_username[1]} введен некорректно.\nИспользуйте /delAdmin --help',
                                      parse_mode='HTML')
+
     elif verification[0]:
         bot.send_message(chat_id=chat_id,
                          text='<b>permission denied</b>',
@@ -365,7 +394,8 @@ def callback_inline(call: types.CallbackQuery):
                     models.User.create(user_id=call.from_user.id, nickname=call.from_user.username)
                     models.db.close()
                     bot.delete_message(chat_id=call.message.chat.id, message_id=call.message.id)
-                    bot.send_message(call.message.chat.id, "Поздравляем! Вы стали участником лотереи!", reply_markup=user_keyboard())
+                    bot.send_message(call.message.chat.id, "Поздравляем! Вы стали участником лотереи!",
+                                     reply_markup=user_keyboard())
                 except:
                     print("Юзер еблан, пускай на кнопку не спамит")
             else:
@@ -386,6 +416,7 @@ def callback_inline(call: types.CallbackQuery):
             text += f"@{user.nickname} - {user.tikets}\n"
         bot.send_message(call.message.chat.id, text)
         models.db.close()
+
 
 @bot.message_handler(func=lambda message: True)
 def count_messages(message: types.Message):
