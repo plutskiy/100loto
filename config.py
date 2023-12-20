@@ -117,6 +117,18 @@ def set_admin(username: str, name: str, main: bool) -> bool:
     return False
 
 
+def set_config(params: tuple[int, ...]):
+    data['message']['needed_msg'] = params[0]
+    data['message']['ref_msg'] = params[1]
+    data['ticket']['per_msg'] = params[2]
+    data['ticket']['ref_msg'] = params[3]
+    dump()
+
+
+def get_tam_info() -> tuple[int, ...]:
+    return data['message']['needed_msg'], data['message']['ref_msg'], data['ticket']['per_msg'], data['ticket']['ref_msg']
+
+
 if not os.path.exists('config.json'):
     create()
 

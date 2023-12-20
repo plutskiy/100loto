@@ -351,8 +351,6 @@ def addAdmin(message: types.Message):
                         bot.send_message(chat_id=chat_id,
                                          text=f'<b>Ошибка</b>: Администратор @{username} уже записан в системе',
                                          parse_mode='HTML')
-
-
     elif verification[0]:
         bot.send_message(chat_id=chat_id,
                          text='<b>permission denied</b>',
@@ -391,6 +389,52 @@ def delAdmin(message: types.Message):
                     bot.send_message(chat_id=chat_id,
                                      text=f'<b>Ошибка</b>: username {correct_username[1]} введен некорректно.\nИспользуйте /delAdmin --help',
                                      parse_mode='HTML')
+
+    elif verification[0]:
+        bot.send_message(chat_id=chat_id,
+                         text='<b>permission denied</b>',
+                         parse_mode='HTML')
+
+
+@bot.message_handler(commands=['setCFG'])
+def setCFG(message: types.Message):
+    if message.chat.type != 'private':
+        return
+    chat_id = message.chat.id
+    user_id = message.from_user.id
+    user_username = message.from_user.username
+    verification = config.is_admin(user_username, user_id)
+    if verification[0] and verification[3]:
+        parts = list(message.text.split())[1:]
+        if '--help' in parts or not parts:
+            bot.send_message(chat_id=chat_id,
+                             text=create.setCFG_info(),
+                             parse_mode='HTML')
+        elif parts:
+            set_params = {
+                '-x': config.data['message']['needed_msg'],
+                '-y': config.data['message']['ref_msg'],
+                '-t': config.data['ticket']['per_msg'],
+                '-z': config.data['ticket']['ref_msg']
+            }
+            params = ['-x', '-y', '-t', '-z']
+
+            for i in range(len(parts)):
+                if parts[i] in params:
+                    if i + 1 < len(parts) and not (parts[i + 1] in params):
+                        try:
+                            parts[i + 1] = int(parts[i + 1])
+                            is_correct = True
+                        except:
+                            is_correct = False
+                        if is_correct:
+                            set_params[parts[i]] = parts[i + 1]
+
+            set_params = tuple(set_params.values())
+            config.set_config(set_params)
+            bot.send_message(chat_id=chat_id,
+                             text=create.CFG_tam_info(config.get_tam_info()),
+                             parse_mode='HTML')
 
     elif verification[0]:
         bot.send_message(chat_id=chat_id,
