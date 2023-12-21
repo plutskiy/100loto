@@ -24,6 +24,9 @@ def check_telegram_chanel_link(link: str) -> tuple[bool, str]:
     public_chanel_link_pattern_2 = r't\.me\/[a-zA-Z0-9_]+'
     public_chanel_link_pattern_3 = r'https\:\/\/t\.me\/[a-zA-Z0-9_]+'
 
+    if '+' in link:
+        return False, link
+
     if re.match(public_chanel_link_pattern_1, link):
         return True, link
     elif re.match(public_chanel_link_pattern_2, link):

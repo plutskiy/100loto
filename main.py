@@ -15,21 +15,22 @@ import schedule
 import time
 from backup import backup_db
 
+
 # Функция для резервного копирования базы данных
-# def job():
-#     backup_db("users")
-#
-#
-# def run_schedule():
-#     while True:
-#         schedule.run_pending()
-#         time.sleep(1)
-#
-#
-# schedule.every(1).hour.do(job)
-#
-# schedule_thread = threading.Thread(target=run_schedule)
-# schedule_thread.start()
+def job():
+    backup_db("users")
+
+
+def run_schedule():
+    while True:
+        schedule.run_pending()
+        time.sleep(1)
+
+
+schedule.every(1).hour.do(job)
+
+schedule_thread = threading.Thread(target=run_schedule)
+schedule_thread.start()
 
 # Токен бота
 TOKEN = '5973304457:AAHGtaBx2VladoA7yt1S5H3IV7KDJoVD7z4'
@@ -40,6 +41,7 @@ models.db.create_tables([models.Ref], safe=True)
 models.db.create_tables([models.Tickets], safe=True)
 models.db.create_tables([models.User], safe=True)
 data = config.update()
+
 
 
 # Функция для обработки склонения слов
@@ -69,6 +71,8 @@ def user_keyboard():
 # Команда бота для отправки реферальной ссылки
 @bot.message_handler(commands=['ref'])
 def send_referral_link(message):
+    if message.chat.type != 'private':
+        return
     user_id = message.from_user.id
     referral_link = f"https://t.me/test22832131bot?start={user_id}"
     bot.send_message(user_id, f"Ваша реферальная ссылка: {referral_link}")
@@ -176,7 +180,8 @@ def drop(message):
     verification = config.is_admin(user_username, user_id)
     if verification[0]:
         models.clear()
-        bot.send_message(-1002143147104, "Лотерея была сброшена")
+        for chat_id in data['chan_id']:
+            bot.send_message(chat_id, "Лотерея запущена")
 
 
 # Команда бота для сброса билетов
@@ -239,7 +244,8 @@ def tickets(message):
     user_id = message.from_user.id
     user_username = message.from_user.username
     verification = config.is_admin(user_username, user_id)
-    if models.User.select().where(models.User.user_id == user_id).archieved:
+    user = models.User.get(models.User.nickname == user_username)
+    if user.archieved:
         bot.send_message(user_id, "Вы были удалены из лотереи и больше не можете ей пользоваться")
         return
     if verification[0] and len(message.text.split()) == 2:
@@ -593,29 +599,38 @@ def setCFG(message: types.Message):
                          text='<b>permission denied</b>',
                          parse_mode='HTML')
 
-
-@bot.message_handler(commands=['d'])
-def d(message: types.Message):
-    # lst = list(message.text.split())[1:]
-    # for link in lst:
-    #     bot.send_message(chat_id=message.chat.id,
-    #                      text=str(check.check_telegram_chanel_link(link)))
-    chat = bot.get_chat(message.chat.id)
-    print(str(chat))
-    usr = message.chat.username
-    print(usr)
-    link = bot.get_chat(message.chat.id).invite_link
-    print(link)
-
-    # link = bot.export_chat_invite_link(chat_id)
-    # bot.send_message(chat_id=message.chat.id,
-    #                      text=str(link))
-
-
-@bot.message_handler(commands=['ddd'])
-def ddd(message: types.Message):
-    print(str(data))
-
+@bot.message_handler(commands=['deleteChannel'])
+def deleteChannel(message: types.Message):
+    if message.chat.type != 'private':
+        return
+    chat_id = message.chat.id
+    user_id = message.from_user.id
+    user_username = message.from_user.username
+    verification = config.is_admin(user_username, user_id)
+    if verification[0] and verification[3]:
+        parts = list(message.text.split())[1:]
+        if '--help' in parts or not parts:
+            bot.send_message(chat_id=chat_id,
+                             text=create.deleteChannel_info(),
+                             parse_mode='HTML')
+        elif parts:
+            ok, link = check.check_telegram_chanel_link(parts[0])
+            if ok:
+                deleted_chat = bot.get_chat(link)
+                if config.delete_channel(str(deleted_chat.id)):
+                    bot.send_message(chat_id=chat_id,
+                                     text=f'Канал {deleted_chat.title} был удален.')
+                else:
+                    bot.send_message(chat_id=chat_id,
+                                     text=f'Канал {deleted_chat.title} не существует в списке')
+            else:
+                bot.send_message(chat_id=chat_id,
+                                 text='<b>Ошибка:</b> ссылка введена некорректно или отсутствует.\nИспользуйте /deleteСhannel --help',
+                                 parse_mode='HTML')
+    elif verification[0]:
+        bot.send_message(chat_id=chat_id,
+                         text='<b>permission denied</b>',
+                         parse_mode='HTML')
 
 # Команда бота для добавления канала
 @bot.message_handler(commands=['addChannel'])
@@ -633,9 +648,9 @@ def addChannel(message: types.Message):
                              text=create.addChannel_info(),
                              parse_mode='HTML')
         elif parts:
-            correct_link = check.check_telegram_chanel_link(parts[0])
-            if correct_link[0]:
-                link = correct_link[1]
+            ok, link = check.check_telegram_chanel_link(parts[0])
+            print(ok)
+            if ok:
                 params = ['-n']
                 channel_name = ''
 
@@ -670,24 +685,23 @@ def addChannel(message: types.Message):
                     except:
                         is_successfully = False
 
-
-                    if is_successfully and not(channel_invite_link is None):
+                    if is_successfully and not (channel_invite_link is None):
                         print(channel_id)
                         print(channel_name)
                         print(str(bot.get_chat(link)))
                         if config.add_channel(channel_id, channel_name):
                             bot.send_message(chat_id=chat_id,
-                                             text=f'Канал {link} был добавлен.')
+                                             text=f'Канал {bot.get_chat(link).title} был добавлен.')
                         else:
                             bot.send_message(chat_id=chat_id,
-                                             text=f'Канал {link} уже существует в списке')
+                                             text=f'Канал {bot.get_chat(link).title} уже существует в списке')
                     else:
                         bot.send_message(chat_id=chat_id,
-                                         text=f'<b>Ошибка:</b> у бота нет доступа к каналу {link}.\nУбедитесь, что ссылка введена правильно и бот является администратором указанного канала.',
+                                         text=f'<b>Ошибка:</b> у бота нет доступа к каналу {bot.get_chat(link).title}.\nУбедитесь, что ссылка введена правильно и бот является администратором указанного канала.',
                                          parse_mode='HTML')
             else:
                 bot.send_message(chat_id=chat_id,
-                                 text='<b>Ошибка:</b> ссылка введена некорректно или отсутствует.\nИспользуйте /addСhannel --help</b>',
+                                 text='<b>Ошибка:</b> ссылка введена некорректно или отсутствует.\nИспользуйте /addСhannel --help',
                                  parse_mode='HTML')
     elif verification[0]:
         bot.send_message(chat_id=chat_id,
@@ -772,7 +786,7 @@ def count_messages(message: types.Message):
                 user.save()
                 for _ in range(data['ticket']['per_msg']):
                     tiket = models.Tickets.create(user=user)
-                    print(f"Билет {tiket.id} создан для {user_id}")
+                    print(f"Билет {tiket.id} создан для {user.nickname}")
 
                 if models.Ref.select().where(models.Ref.join_id == user_id).exists():
                     ref = models.Ref.get(models.Ref.join_id == user_id)
@@ -782,18 +796,19 @@ def count_messages(message: types.Message):
                         joined_user.save()
 
                         for _ in range(data['ticket']['ref_msg']):
-                            models.Tickets.create(user=joined_user)
+                            tiket =models.Tickets.create(user=joined_user)
+                            print(f"Билет {tiket.id} создан для {joined_user.nickname}")
 
-                        bot.send_message(joined_user.user_id, "Поздравляем! Вы получили 5 билетов!")
+                        bot.send_message(joined_user.user_id, f"Поздравляем! Вы получили {data['ticket']['ref_msg']} билетов!")
 
                         invited_user = models.User.get(models.User.user_id == ref.invite_id)
                         invited_user.tikets += data['ticket']['ref_msg']
                         invited_user.save()
 
                         for _ in range(data['ticket']['ref_msg']):
-                            models.Tickets.create(user=invited_user)
-
-                        bot.send_message(invited_user.user_id, "Поздравляем! Вы получили 5 билетов!")
+                            tiket = models.Tickets.create(user=invited_user)
+                            print(f"Билет {tiket.id} создан для {invited_user.nickname}")
+                        bot.send_message(invited_user.user_id, f"Поздравляем! Вы получили {data['ticket']['ref_msg']} билетов!")
 
                         ref.delete_instance()
                     ref.msg_count += 1

@@ -13,7 +13,7 @@ def create():
         'username': 'pluton4ick',
         'id': -1,
         'name': 'Платон',
-        'main': False
+        'main': True
     })
 
     tmp_data['admin'].append({
@@ -149,11 +149,21 @@ def remove_chat(chat_id: int) -> bool:
 
 
 def add_channel(channel_id: int, channel_name: str) -> bool:
-    if channel_id in data['channel']:
+    if str(channel_id) in data['channel']:
         return False
     else:
         data['channel'][int(channel_id)] = channel_name
         dump()
+        update()
+        return True
+
+def delete_channel(channel_id: int) -> bool:
+    if channel_id not in data['channel']:
+        return False
+    else:
+        data['channel'].pop(channel_id)
+        dump()
+        update()
         return True
 
 

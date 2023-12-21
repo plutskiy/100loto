@@ -41,7 +41,6 @@ def auth_info() -> str:
     text += '<b>--help</b> - Узнать информацию о команде\n'
     return text
 
-
 def addAdmin_info() -> str:
     text = 'Функция /addAdmin добавляет администратора в систему по его username\n\n'
     text += 'Допустимый ввод username:\n'
