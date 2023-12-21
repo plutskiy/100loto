@@ -1,5 +1,7 @@
 import logging
 import random
+
+import peewee
 from peewee import *
 
 import telebot
@@ -83,21 +85,22 @@ def start(message):
     user_id = message.from_user.id
     referral_id = message.text[7:]
     verification = config.is_admin(message.from_user.username, user_id)
-    if verification[0]:
-        bot.send_message(user_id,
-                         text='Добро пожаловать в админ панель',
-                         parse_mode='HTML')
-        bot.send_message(user_id,
-                         text=create.help_info(),
-                         parse_mode='HTML')
-        return
-    if models.User.select().where(models.User.user_id == user_id).archieved:
-        bot.send_message(user_id, "Вы были удалены из лотереи и больше не можете ей пользоваться")
-        return
+    # if verification[0]:
+    #     bot.send_message(user_id,
+    #                      text='Добро пожаловать в админ панель',
+    #                      parse_mode='HTML')
+    #     bot.send_message(user_id,
+    #                      text=create.help_info(),
+    #                      parse_mode='HTML')
+    #     return
     if models.Ref.select().where(models.Ref.join_id == user_id).exists():
         bot.send_message(message.chat.id, 'Вы уже присоеденились по реферальной ссылке')
         return
     if models.User.select().where(models.User.user_id == user_id).exists():
+        user = models.User.get(models.User.user_id == user_id)
+        if user.archieved:
+            bot.send_message(user_id, "Вы были удалены из лотереи и больше не можете ей пользоваться")
+            return
         bot.send_message(message.chat.id, "[      Меню      ]", reply_markup=user_keyboard())
         return
     if referral_id != "":
@@ -260,10 +263,12 @@ def tickets(message):
     elif not models.User.select().where(models.User.user_id == user_id).exists():
         bot.send_message(message.chat.id, "Вы не участвуете в лотерее")
 
+
 @bot.message_handler(commands=['unban'])
-def unban(message : types.Message):
+def unban(message: types.Message):
     if message.chat.type != 'private':
         return
+    models.db.connect()
     params = list(message.text.split())
     if len(params) == 2:
         try:
@@ -271,15 +276,16 @@ def unban(message : types.Message):
             if user.archieved:
                 user.archieved = False
                 bot.send_message(message.chat.id, f"Этот пользователь {params[1]} успешно разбанен!")
-            else:
-                bot.send_message(message.chat.id, f"Этот пользователь {params[1]} не забанен!")
                 bot.send_message(user.user_id, "Вы были разбанены!")
+                user.save()
+            else:
+                    bot.send_message(message.chat.id, f"Этот пользователь {params[1]} не забанен!")
         except:
             bot.send_message(message.chat.id, "Пользователь не найден")
-        else:
+    else:
             bot.send_message(message.chat.id, "Неправильный формат команды!")
 
-
+    models.db.close()
 # Команда бота для удаления пользователя
 @bot.message_handler(commands=['delete'])
 def delete(message):
@@ -292,7 +298,9 @@ def delete(message):
         params = list(message.text.split())
         if len(params) == 2:
             try:
+                models.db.connect()
                 user = models.User.get(models.User.nickname == params[1])
+                deleted_user_id = user.user_id
                 user.delete_instance(recursive=True)
                 tickets = models.Tickets.select().order_by(models.Tickets.id)
 
@@ -306,10 +314,12 @@ def delete(message):
                 with models.db.atomic():
                     for i, ticket_data in enumerate(tickets_data, start=1):
                         models.Tickets.create(id=i, **ticket_data)
-                models.User.create(user_id=user_id, archieved=True)
+                models.User.create(user_id=deleted_user_id, nickname=params[1], archieved=True)
                 bot.send_message(message.chat.id, f"Пользователь {params[1]} был удален")
                 bot.send_message(user.user_id, f"Вы удалены из лотереи")
-            except:
+                models.db.close()
+            except peewee.Expression as e:
+                print(e)
                 bot.send_message(message.chat.id, "Пользователь не найден")
         else:
             bot.send_message(message.chat.id, "Неверный формат команды")
@@ -642,9 +652,11 @@ def addChannel(message: types.Message):
 # Обратный вызов для встроенных запросов
 @bot.callback_query_handler(func=lambda call: True)
 def callback_inline(call: types.CallbackQuery):
-    if models.User.select().where(models.User.user_id == call.from_user.id).archieved:
-        bot.send_message(call.from_user.id, "Вы были удалены из лотереи и больше не можете ей пользоваться")
-        return
+    if models.User.select().where(models.User.user_id == call.from_user.id).exists():
+        user = models.User.get(user_id=call.from_user.id)
+        if user.archieved:
+            bot.send_message(call.from_user.id, 'Вы были забанены')
+            return
     if call.data == "check":
         if not models.User.select().where(models.User.user_id == call.from_user.id).exists():
             is_not_subscribed_channels = is_user_subscribed(call.from_user.id)
@@ -688,9 +700,6 @@ def count_messages(message: types.Message):
     chat_id = message.chat.id
     if chat_id not in data['chan_id']:
         return
-    if models.User.select().where(models.User.user_id == user_id).archieved:
-        bot.send_message(user_id, "Вы были удалены из лотереи и больше не можете ей пользоваться")
-        return
     if len(message.text.split()) >= 3:
         models.db.connect()
         if models.User.select().where(models.User.user_id == user_id).exists():
@@ -699,6 +708,9 @@ def count_messages(message: types.Message):
                 models.User.update(msg_count=models.User.msg_count + 1).where(models.User.user_id == user_id).execute()
                 models.db.close()
                 return
+            elif models.User.select().where(models.User.user_id == user_id).get().archieved:
+                return
+        models.db.close()
     if not stop:
         if len(message.text.split()) >= 3:
             models.db.connect()
