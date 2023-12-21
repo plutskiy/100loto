@@ -23,9 +23,6 @@ def create():
         'main': True
     })
 
-    tmp_data['channel']['Будка хлепла'] = 'puton4ick'
-    tmp_data['channel']['Хуйня помойная'] = 'yagaydd'
-
     tmp_data['ticket'] = {
         'per_msg': 1,
         "ref_msg": 1
@@ -132,6 +129,7 @@ def get_tam_info() -> tuple[int, ...]:
     return data['message']['needed_msg'], data['message']['ref_msg'], data['ticket']['per_msg'], data['ticket'][
         'ref_msg']
 
+
 def add_chat(chat_id: int) -> bool:
     if chat_id in data['chan_id']:
         return False
@@ -140,6 +138,7 @@ def add_chat(chat_id: int) -> bool:
         dump()
         return True
 
+
 def remove_chat(chat_id: int) -> bool:
     if chat_id not in data['chan_id']:
         return False
@@ -147,6 +146,16 @@ def remove_chat(chat_id: int) -> bool:
         data['chan_id'].remove(chat_id)
         dump()
         return True
+
+
+def add_channel(channel_id: int, channel_name: str) -> bool:
+    if channel_id in data['channel']:
+        return False
+    else:
+        data['channel'][int(channel_id)] = channel_name
+        dump()
+        return True
+
 
 if not os.path.exists('config.json'):
     create()

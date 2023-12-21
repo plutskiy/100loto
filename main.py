@@ -15,22 +15,21 @@ import schedule
 import time
 from backup import backup_db
 
-
 # Функция для резервного копирования базы данных
-def job():
-    backup_db("users")
-
-
-def run_schedule():
-    while True:
-        schedule.run_pending()
-        time.sleep(1)
-
-
-schedule.every(1).hour.do(job)
-
-schedule_thread = threading.Thread(target=run_schedule)
-schedule_thread.start()
+# def job():
+#     backup_db("users")
+#
+#
+# def run_schedule():
+#     while True:
+#         schedule.run_pending()
+#         time.sleep(1)
+#
+#
+# schedule.every(1).hour.do(job)
+#
+# schedule_thread = threading.Thread(target=run_schedule)
+# schedule_thread.start()
 
 # Токен бота
 TOKEN = '5973304457:AAHGtaBx2VladoA7yt1S5H3IV7KDJoVD7z4'
@@ -112,7 +111,7 @@ def start(message):
     check = types.InlineKeyboardMarkup()
     button = types.InlineKeyboardButton(text="Проверить подписку", callback_data="check")
     check.add(button)
-    channels = create.channels_list(data['channel'])
+    channels = create.channels_list(get_invite_links())
     bot.send_message(message.chat.id,
                      f'''Привет, {message.from_user.first_name}! Добро пожаловать в нашу лотерею
 
@@ -213,7 +212,7 @@ def stop(message):
     verification = config.is_admin(user_username, user_id)
     if verification[0]:
         stop = True
-        for chat_id in data['']:
+        for chat_id in data['chan_id']:
             bot.send_message(chat_id, "Лотерея остановлена")
 
 
@@ -279,13 +278,15 @@ def unban(message: types.Message):
                 bot.send_message(user.user_id, "Вы были разбанены!")
                 user.save()
             else:
-                    bot.send_message(message.chat.id, f"Этот пользователь {params[1]} не забанен!")
+                bot.send_message(message.chat.id, f"Этот пользователь {params[1]} не забанен!")
         except:
             bot.send_message(message.chat.id, "Пользователь не найден")
     else:
-            bot.send_message(message.chat.id, "Неправильный формат команды!")
+        bot.send_message(message.chat.id, "Неправильный формат команды!")
 
     models.db.close()
+
+
 # Команда бота для удаления пользователя
 @bot.message_handler(commands=['delete'])
 def delete(message):
@@ -353,12 +354,24 @@ def lottery(message):
 # Функция для проверки подписки пользователя
 def is_user_subscribed(user_id) -> dict:
     result = dict()
-    for channel_nickname, channel_username in data['channel'].items():
+    for channel_id, channel_nickname in data['channel'].items():
         try:
-            chat_member = bot.get_chat_member(f'@{channel_username}', user_id)
+            channel_invite_link = bot.get_chat(channel_id).invite_link
+            chat_member = bot.get_chat_member(channel_id, user_id)
             if not (
                     chat_member.status == 'member' or chat_member.status == 'administrator' or chat_member.status == 'creator'):
-                result[channel_nickname] = channel_username
+                result[channel_invite_link] = channel_nickname
+        except telebot.apihelper.ApiTelegramException as e:
+            logging.error(e)
+    return result
+
+
+def get_invite_links() -> dict:
+    result = dict()
+    for channel_id, channel_nickname in data['channel'].items():
+        try:
+            channel_invite_link = bot.get_chat(channel_id).invite_link
+            result[channel_invite_link] = channel_nickname
         except telebot.apihelper.ApiTelegramException as e:
             logging.error(e)
     return result
@@ -581,6 +594,29 @@ def setCFG(message: types.Message):
                          parse_mode='HTML')
 
 
+@bot.message_handler(commands=['d'])
+def d(message: types.Message):
+    # lst = list(message.text.split())[1:]
+    # for link in lst:
+    #     bot.send_message(chat_id=message.chat.id,
+    #                      text=str(check.check_telegram_chanel_link(link)))
+    chat = bot.get_chat(message.chat.id)
+    print(str(chat))
+    usr = message.chat.username
+    print(usr)
+    link = bot.get_chat(message.chat.id).invite_link
+    print(link)
+
+    # link = bot.export_chat_invite_link(chat_id)
+    # bot.send_message(chat_id=message.chat.id,
+    #                      text=str(link))
+
+
+@bot.message_handler(commands=['ddd'])
+def ddd(message: types.Message):
+    print(str(data))
+
+
 # Команда бота для добавления канала
 @bot.message_handler(commands=['addChannel'])
 def addChannel(message: types.Message):
@@ -590,63 +626,73 @@ def addChannel(message: types.Message):
     user_id = message.from_user.id
     user_username = message.from_user.username
     verification = config.is_admin(user_username, user_id)
-    if verification[0]:
+    if verification[0] and verification[3]:
         parts = list(message.text.split())[1:]
         if '--help' in parts or not parts:
             bot.send_message(chat_id=chat_id,
                              text=create.addChannel_info(),
                              parse_mode='HTML')
         elif parts:
-            correct_username = check.check_telegram_link(parts[0])
-            if not correct_username[0]:
-                bot.send_message(chat_id=chat_id,
-                                 text='<b>Ошибка:</b> username введен некорректно или отсутствует.\nИспользуйте /addChannel --help</b>',
-                                 parse_mode='HTML')
-            else:
-                parts[0] = correct_username[1]
-                params = ['-n', '-s']
-                name = ''
-                is_setted = False
+            correct_link = check.check_telegram_chanel_link(parts[0])
+            if correct_link[0]:
+                link = correct_link[1]
+                params = ['-n']
+                channel_name = ''
 
                 if '-n' in parts:
                     param_index = parts.index('-n')
                     for i in range(param_index + 1, len(parts)):
                         if parts[i] in params:
                             break
-                        name += f'{parts[i]} '
+                        channel_name += f'{parts[i]} '
 
-                if len(name) == 0 and '-n' in parts and not ('-s' in parts):
+                if len(channel_name) == 0 and '-n' in parts:
                     bot.send_message(chat_id=chat_id,
-                                     text='<b>Ошибка:</b> не указано имя после флага -n',
+                                     text='<b>Ошибка:</b> не указано название после флага -n',
                                      parse_mode='HTML')
                 else:
-                    if len(name) != 0:
-                        name = name[:-1]
+                    is_successfully = True
+                    if len(channel_name) != 0:
+                        channel_name = channel_name[:-1]
                     else:
-                        name = 'channel'
-                    username = parts[0]
+                        try:
+                            channel_name = bot.get_chat(link).title
+                        except:
+                            is_successfully = False
 
-                    if '-s' in parts:
-                        is_s_par = True
-                        is_added = False
-                        is_setted = config.set_channel(username, name)
+                    try:
+                        channel_id = bot.get_chat(link).id
+                    except:
+                        is_successfully = False
+
+                    try:
+                        channel_invite_link = bot.get_chat(link).invite_link
+                    except:
+                        is_successfully = False
+
+
+                    if is_successfully and not(channel_invite_link is None):
+                        print(channel_id)
+                        print(channel_name)
+                        print(str(bot.get_chat(link)))
+                        if config.add_channel(channel_id, channel_name):
+                            bot.send_message(chat_id=chat_id,
+                                             text=f'Канал {link} был добавлен.')
+                        else:
+                            bot.send_message(chat_id=chat_id,
+                                             text=f'Канал {link} уже существует в списке')
                     else:
-                        is_s_par = False
-                        is_added = config.add_channel(username, name)
-                        is_setted = False
-
-                    if is_s_par and is_setted:
                         bot.send_message(chat_id=chat_id,
-                                         text=create.set_channel_text(username, name),
+                                         text=f'<b>Ошибка:</b> у бота нет доступа к каналу {link}.\nУбедитесь, что ссылка введена правильно и бот является администратором указанного канала.',
                                          parse_mode='HTML')
-                    elif is_s_par and not is_setted:
-                        bot.send_message(chat_id=chat_id,
-                                         text=f'<b>Ошибка</b>: Канал @{username} не является каналом лотереи',
-                                         parse_mode='HTML')
-                    elif not is_s_par and is_added:
-                        bot.send_message(chat_id=chat_id,
-                                         text=create.add_channel_text(username, name),
-                                         parse_mode='HTML')
+            else:
+                bot.send_message(chat_id=chat_id,
+                                 text='<b>Ошибка:</b> ссылка введена некорректно или отсутствует.\nИспользуйте /addСhannel --help</b>',
+                                 parse_mode='HTML')
+    elif verification[0]:
+        bot.send_message(chat_id=chat_id,
+                         text='<b>permission denied</b>',
+                         parse_mode='HTML')
 
 
 # Обратный вызов для встроенных запросов
