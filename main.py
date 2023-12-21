@@ -32,8 +32,6 @@ def declension(n, forms):
         return forms[2]
 
 
-
-
 def user_keyboard():
     keyboard = types.InlineKeyboardMarkup()
     keyboard.add(types.InlineKeyboardButton(text="Билеты", callback_data="tickets"))
@@ -58,14 +56,14 @@ def start(message):
     user_id = message.from_user.id
     referral_id = message.text[7:]
     verification = config.is_admin(message.from_user.username, user_id)
-    # if verification[0]:
-    #     bot.send_message(user_id,
-    #                      text='Добро пожаловать в админ панель',
-    #                      parse_mode='HTML')
-    #     bot.send_message(user_id,
-    #                      text=create.help_info(),
-    #                      parse_mode='HTML')
-    #     return
+    if verification[0]:
+        bot.send_message(user_id,
+                         text='Добро пожаловать в админ панель',
+                         parse_mode='HTML')
+        bot.send_message(user_id,
+                         text=create.help_info(),
+                         parse_mode='HTML')
+        return
     if models.Ref.select().where(models.Ref.join_id == user_id).exists():
         bot.send_message(message.chat.id, 'Вы уже присоеденились по реферальной ссылке')
         return
@@ -87,7 +85,8 @@ def start(message):
 
 За каждое сообщение в чатах учавствующих в лотерее более <b>{data['message']['needed_msg']}</b> {declension(data['message']['needed_msg'], word_forms_message)} вы получите <b>{data['ticket']['per_msg']}</b> {declension(data['ticket']['per_msg'], word_forms_ticket)}.
 
-Если вы пригласите другого участника, и он напишет <b>{data['message']['ref_msg']}</b> {declension(data['message']['ref_msg'], word_forms_message)}, вы оба получите по <b>{data['ticket']['ref_msg']}</b> {declension(data['ticket']['ref_msg'], word_forms_ticket)}.''', parse_mode='HTML'
+Если вы пригласите другого участника, и он напишет <b>{data['message']['ref_msg']}</b> {declension(data['message']['ref_msg'], word_forms_message)}, вы оба получите по <b>{data['ticket']['ref_msg']}</b> {declension(data['ticket']['ref_msg'], word_forms_ticket)}.''',
+                     parse_mode='HTML'
                      )
     bot.send_message(message.chat.id,
                      f"Для участия в лотерее тебе нужно быть подписанным на следующие каналы:\n{channels}",
@@ -280,16 +279,17 @@ def lottery(message):
             bot.send_message(chats, f"Победители лотереи: @{winners_text}")
 
 
-def is_user_subscribed(user_id) -> bool:
-    channel_username = "@puton4ick"
-    try:
-        chat_member = bot.get_chat_member(channel_username, user_id)
-        if chat_member.status == 'member' or chat_member.status == 'administrator' or chat_member.status == 'creator':
-            return True
-        else:
-            return False
-    except telebot.apihelper.ApiTelegramException as e:
-        logging.error(e)
+def is_user_subscribed(user_id) -> dict:
+    result = dict()
+    for channel_nickname, channel_username in data['channel'].items():
+        try:
+            chat_member = bot.get_chat_member(f'@{channel_username}', user_id)
+            if not (
+                    chat_member.status == 'member' or chat_member.status == 'administrator' or chat_member.status == 'creator'):
+                result[channel_nickname] = channel_username
+        except telebot.apihelper.ApiTelegramException as e:
+            logging.error(e)
+    return result
 
 
 @bot.message_handler(commands=['help'])
@@ -508,11 +508,24 @@ def setCFG(message: types.Message):
                          parse_mode='HTML')
 
 
+@bot.message_handler(commands=['addChannel'])
+def addChannel(message: types.Message):
+    if message.chat.type != 'private':
+        return
+    chat_id = message.chat.id
+    user_id = message.from_user.id
+    user_username = message.from_user.username
+    verification = config.is_admin(user_username, user_id)
+    # if verification[0] and verification[3]:
+
+
+
 @bot.callback_query_handler(func=lambda call: True)
 def callback_inline(call: types.CallbackQuery):
     if call.data == "check":
         if not models.User.select().where(models.User.user_id == call.from_user.id).exists():
-            if is_user_subscribed(call.from_user.id) == True:
+            is_not_subscribed_channels = is_user_subscribed(call.from_user.id)
+            if not is_not_subscribed_channels:
                 try:
                     models.db.connect()
                     models.User.create(user_id=call.from_user.id, nickname=call.from_user.username)
@@ -523,7 +536,9 @@ def callback_inline(call: types.CallbackQuery):
                 except:
                     print("Юзер еблан, пускай на кнопку не спамит")
             else:
-                bot.send_message(call.message.chat.id, "Подпишитесь на канал и попробуйте снова")
+                bot.send_message(call.message.chat.id,
+                                 f"Вы не подписаны на следующие каналы:\n{create.channels_list(is_not_subscribed_channels)}",
+                                 parse_mode='HTML')
     elif call.data == "tickets":
         models.db.connect()
         user = models.User.get(models.User.user_id == call.from_user.id)

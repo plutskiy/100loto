@@ -2,7 +2,7 @@ def channels_list(channels: dict) -> str:
     text = str()
     i = 1
     for name, url in channels.items():
-        text += f'{i}. <a href="https://t.me/{url}">{name}</a>'
+        text += f'{i}. <a href="https://t.me/{url}">{name}</a>\n'
         i += 1
     return text
 

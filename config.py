@@ -23,6 +23,7 @@ def create():
     })
 
     tmp_data['channel']['Будка хлепла'] = 'puton4ick'
+    tmp_data['channel']['Хуйня помойная'] = 'yagaydd'
 
     tmp_data['ticket'] = {
         'per_msg': 1,
