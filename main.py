@@ -11,31 +11,37 @@ import models
 import threading
 import schedule
 import time
-from backup import backup_db  # предполагается, что функция backup_db находится в файле backup.py
+from backup import backup_db
 
+
+# Функция для резервного копирования базы данных
 def job():
     backup_db("users")
+
 
 def run_schedule():
     while True:
         schedule.run_pending()
         time.sleep(1)
 
+
 schedule.every(1).hour.do(job)
 
 schedule_thread = threading.Thread(target=run_schedule)
 schedule_thread.start()
 
+# Токен бота
 TOKEN = '5973304457:AAHGtaBx2VladoA7yt1S5H3IV7KDJoVD7z4'
 bot = telebot.TeleBot(TOKEN)
 stop = True
-group_chats_ids = [-1002143147104]
+# Создание таблиц в базе данных
 models.db.create_tables([models.Ref], safe=True)
 models.db.create_tables([models.Tickets], safe=True)
 models.db.create_tables([models.User], safe=True)
 data = config.update()
 
 
+# Функция для обработки склонения слов
 def declension(n, forms):
     n = abs(n) % 100
     n1 = n % 10
@@ -49,6 +55,8 @@ def declension(n, forms):
         return forms[2]
 
 
+# Функция для создания пользовательской клавиатуры
+
 def user_keyboard():
     keyboard = types.InlineKeyboardMarkup()
     keyboard.add(types.InlineKeyboardButton(text="Билеты", callback_data="tickets"))
@@ -57,6 +65,7 @@ def user_keyboard():
     return keyboard
 
 
+# Команда бота для отправки реферальной ссылки
 @bot.message_handler(commands=['ref'])
 def send_referral_link(message):
     user_id = message.from_user.id
@@ -64,6 +73,7 @@ def send_referral_link(message):
     bot.send_message(user_id, f"Ваша реферальная ссылка: {referral_link}")
 
 
+# Команда бота для запуска бота
 @bot.message_handler(commands=['start'])
 def start(message):
     if message.chat.type != 'private':
@@ -112,6 +122,7 @@ def start(message):
                      )
 
 
+# Команда бота для удаления чата из учавствующих в начислении билетов
 @bot.message_handler(commands=['removechat'])
 def remove_chat(message):
     if message.chat.type == 'private':
@@ -130,6 +141,7 @@ def remove_chat(message):
             bot.send_message(user_id, f"Чата {chat_title} нет в списке лотереи")
 
 
+# Команда бота для добавления чата в учавствующих в начислении билетов
 @bot.message_handler(commands=['addchat'])
 def add_chat(message):
     if message.chat.type == 'private':
@@ -149,6 +161,7 @@ def add_chat(message):
             bot.send_message(user_id, f"Чат '{chat_title}' уже добавлен в лотерею")
 
 
+# Команда бота для сброса всей лотереи
 @bot.message_handler(commands=['reset'])
 def drop(message):
     if message.chat.type != 'private':
@@ -161,6 +174,7 @@ def drop(message):
         bot.send_message(-1002143147104, "Лотерея была сброшена")
 
 
+# Команда бота для сброса билетов
 @bot.message_handler(commands=['reset_tickets'])
 def drop(message):
     if message.chat.type != 'private':
@@ -182,6 +196,7 @@ def drop(message):
         bot.send_message(message.chat.id, "Все билеты были удалены")
 
 
+# Команда бота для остановки начисления билетов
 @bot.message_handler(commands=['stop_lottery'])
 def stop(message):
     if message.chat.type != 'private':
@@ -192,10 +207,11 @@ def stop(message):
     verification = config.is_admin(user_username, user_id)
     if verification[0]:
         stop = True
-        for chat_id in group_chats_ids:
+        for chat_id in data['']:
             bot.send_message(chat_id, "Лотерея остановлена")
 
 
+# Команда бота для запуска начисления билетов
 @bot.message_handler(commands=['start_lottery'])
 def start(message):
     if message.chat.type != 'private':
@@ -206,10 +222,11 @@ def start(message):
     verification = config.is_admin(user_username, user_id)
     if verification[0]:
         stop = False
-        for chat_id in group_chats_ids:
+        for chat_id in data['chan_id']:
             bot.send_message(chat_id, "Лотерея запущена")
 
 
+# Команда бота для проверки билетов
 @bot.message_handler(commands=['tickets'])
 def tickets(message):
     if message.chat.type != 'private':
@@ -238,6 +255,7 @@ def tickets(message):
         bot.send_message(message.chat.id, "Вы не участвуете в лотерее")
 
 
+# Команда бота для удаления пользователя
 @bot.message_handler(commands=['delete'])
 def delete(message):
     if message.chat.type != 'private':
@@ -272,6 +290,7 @@ def delete(message):
             bot.send_message(message.chat.id, "Неверный формат команды")
 
 
+# Команда бота для выбора победителя
 @bot.message_handler(commands=['winner'])
 def lottery(message):
     if message.chat.type != 'private':
@@ -292,10 +311,11 @@ def lottery(message):
             if winner_nickname not in winners_nicknames:
                 winners_nicknames.add(winner_nickname)
         winners_text = ', @'.join(winners_nicknames)
-        for chats in group_chats_ids:
-            bot.send_message(chats, f"Победители лотереи: @{winners_text}")
+        for chat_id in data['chan_id']:
+            bot.send_message(chat_id, f"Победители лотереи: @{winners_text}")
 
 
+# Функция для проверки подписки пользователя
 def is_user_subscribed(user_id) -> dict:
     result = dict()
     for channel_nickname, channel_username in data['channel'].items():
@@ -309,6 +329,7 @@ def is_user_subscribed(user_id) -> dict:
     return result
 
 
+# Команда бота для отображения списка команд
 @bot.message_handler(commands=['help'])
 def help(message: types.Message):
     if message.chat.type != 'private':
@@ -323,6 +344,7 @@ def help(message: types.Message):
                          parse_mode='HTML')
 
 
+# Команда бота для аутентификации пользователя
 @bot.message_handler(commands=['auth'])
 def auth(message: types.Message):
     if message.chat.type != 'private':
@@ -362,6 +384,7 @@ def auth(message: types.Message):
                              parse_mode='HTML')
 
 
+# Команда бота для добавления админа
 @bot.message_handler(commands=['addAdmin'])
 def addAdmin(message: types.Message):
     if message.chat.type != 'private':
@@ -434,12 +457,9 @@ def addAdmin(message: types.Message):
                         bot.send_message(chat_id=chat_id,
                                          text=f'<b>Ошибка</b>: Администратор @{username} уже записан в системе',
                                          parse_mode='HTML')
-    elif verification[0]:
-        bot.send_message(chat_id=chat_id,
-                         text='<b>permission denied</b>',
-                         parse_mode='HTML')
 
 
+# Команда бота для удаления админа
 @bot.message_handler(commands=['delAdmin'])
 def delAdmin(message: types.Message):
     if message.chat.type != 'private':
@@ -479,6 +499,7 @@ def delAdmin(message: types.Message):
                          parse_mode='HTML')
 
 
+# Команда бота для установки конфигурации
 @bot.message_handler(commands=['setCFG'])
 def setCFG(message: types.Message):
     if message.chat.type != 'private':
@@ -525,6 +546,7 @@ def setCFG(message: types.Message):
                          parse_mode='HTML')
 
 
+# Команда бота для добавления канала
 @bot.message_handler(commands=['addChannel'])
 def addChannel(message: types.Message):
     if message.chat.type != 'private':
@@ -533,9 +555,67 @@ def addChannel(message: types.Message):
     user_id = message.from_user.id
     user_username = message.from_user.username
     verification = config.is_admin(user_username, user_id)
-    # if verification[0] and verification[3]:
+    if verification[0]:
+        parts = list(message.text.split())[1:]
+        if '--help' in parts or not parts:
+            bot.send_message(chat_id=chat_id,
+                             text=create.addChannel_info(),
+                             parse_mode='HTML')
+        elif parts:
+            correct_username = check.check_telegram_link(parts[0])
+            if not correct_username[0]:
+                bot.send_message(chat_id=chat_id,
+                                 text='<b>Ошибка:</b> username введен некорректно или отсутствует.\nИспользуйте /addChannel --help</b>',
+                                 parse_mode='HTML')
+            else:
+                parts[0] = correct_username[1]
+                params = ['-n', '-s']
+                name = ''
+                is_setted = False
+
+                if '-n' in parts:
+                    param_index = parts.index('-n')
+                    for i in range(param_index + 1, len(parts)):
+                        if parts[i] in params:
+                            break
+                        name += f'{parts[i]} '
+
+                if len(name) == 0 and '-n' in parts and not ('-s' in parts):
+                    bot.send_message(chat_id=chat_id,
+                                     text='<b>Ошибка:</b> не указано имя после флага -n',
+                                     parse_mode='HTML')
+                else:
+                    if len(name) != 0:
+                        name = name[:-1]
+                    else:
+                        name = 'channel'
+                    username = parts[0]
+
+                    if '-s' in parts:
+                        is_s_par = True
+                        is_added = False
+                        is_setted = config.set_channel(username, name)
+                    else:
+                        is_s_par = False
+                        is_added = config.add_channel(username, name)
+                        is_setted = False
+
+                    if is_s_par and is_setted:
+                        bot.send_message(chat_id=chat_id,
+                                         text=create.set_channel_text(username, name),
+                                         parse_mode='HTML')
+                    elif is_s_par and not is_setted:
+                        bot.send_message(chat_id=chat_id,
+                                         text=f'<b>Ошибка</b>: Канал @{username} не является каналом лотереи',
+                                         parse_mode='HTML')
+                    elif not is_s_par and is_added:
+                        bot.send_message(chat_id=chat_id,
+                                         text=create.add_channel_text(username, name),
+                                         parse_mode='HTML')
 
 
+
+# Обратный вызов для встроенных запросов
 @bot.callback_query_handler(func=lambda call: True)
 def callback_inline(call: types.CallbackQuery):
     if call.data == "check":
@@ -573,6 +653,7 @@ def callback_inline(call: types.CallbackQuery):
         models.db.close()
 
 
+# Обработчик сообщений для начсиления тикетов
 @bot.message_handler(func=lambda message: True)
 def count_messages(message: types.Message):
     global stop
