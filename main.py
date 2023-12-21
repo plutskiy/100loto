@@ -91,6 +91,9 @@ def start(message):
                          text=create.help_info(),
                          parse_mode='HTML')
         return
+    if models.User.select().where(models.User.user_id == user_id).archieved:
+        bot.send_message(user_id, "Вы были удалены из лотереи и больше не можете ей пользоваться")
+        return
     if models.Ref.select().where(models.Ref.join_id == user_id).exists():
         bot.send_message(message.chat.id, 'Вы уже присоеденились по реферальной ссылке')
         return
@@ -234,6 +237,9 @@ def tickets(message):
     user_id = message.from_user.id
     user_username = message.from_user.username
     verification = config.is_admin(user_username, user_id)
+    if models.User.select().where(models.User.user_id == user_id).archieved:
+        bot.send_message(user_id, "Вы были удалены из лотереи и больше не можете ей пользоваться")
+        return
     if verification[0] and len(message.text.split()) == 2:
         params = list(message.text.split())
         if len(params) == 2:
@@ -253,6 +259,25 @@ def tickets(message):
         models.db.close()
     elif not models.User.select().where(models.User.user_id == user_id).exists():
         bot.send_message(message.chat.id, "Вы не участвуете в лотерее")
+
+@bot.message_handler(commands=['unban'])
+def unban(message : types.Message):
+    if message.chat.type != 'private':
+        return
+    params = list(message.text.split())
+    if len(params) == 2:
+        try:
+            user = models.User.get(models.User.nickname == params[1])
+            if user.archieved:
+                user.archieved = False
+                bot.send_message(message.chat.id, f"Этот пользователь {params[1]} успешно разбанен!")
+            else:
+                bot.send_message(message.chat.id, f"Этот пользователь {params[1]} не забанен!")
+                bot.send_message(user.user_id, "Вы были разбанены!")
+        except:
+            bot.send_message(message.chat.id, "Пользователь не найден")
+        else:
+            bot.send_message(message.chat.id, "Неправильный формат команды!")
 
 
 # Команда бота для удаления пользователя
@@ -278,10 +303,10 @@ def delete(message):
                     tickets_data.append(ticket_data)
 
                 models.Tickets.delete().execute()
-
                 with models.db.atomic():
                     for i, ticket_data in enumerate(tickets_data, start=1):
                         models.Tickets.create(id=i, **ticket_data)
+                models.User.create(user_id=user_id, archieved=True)
                 bot.send_message(message.chat.id, f"Пользователь {params[1]} был удален")
                 bot.send_message(user.user_id, f"Вы удалены из лотереи")
             except:
@@ -614,10 +639,12 @@ def addChannel(message: types.Message):
                                          parse_mode='HTML')
 
 
-
 # Обратный вызов для встроенных запросов
 @bot.callback_query_handler(func=lambda call: True)
 def callback_inline(call: types.CallbackQuery):
+    if models.User.select().where(models.User.user_id == call.from_user.id).archieved:
+        bot.send_message(call.from_user.id, "Вы были удалены из лотереи и больше не можете ей пользоваться")
+        return
     if call.data == "check":
         if not models.User.select().where(models.User.user_id == call.from_user.id).exists():
             is_not_subscribed_channels = is_user_subscribed(call.from_user.id)
@@ -660,6 +687,9 @@ def count_messages(message: types.Message):
     user_id = message.from_user.id
     chat_id = message.chat.id
     if chat_id not in data['chan_id']:
+        return
+    if models.User.select().where(models.User.user_id == user_id).archieved:
+        bot.send_message(user_id, "Вы были удалены из лотереи и больше не можете ей пользоваться")
         return
     if len(message.text.split()) >= 3:
         models.db.connect()
