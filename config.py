@@ -44,9 +44,10 @@ def dump():
 
 
 def update():
-    global data
     with open('config.json', 'r', encoding='utf-8') as file:
+        global data
         data = json.load(file)
+        return data
 
 
 def add_admin(username: str, name: str, main: bool) -> bool:
@@ -126,8 +127,24 @@ def set_config(params: tuple[int, ...]):
 
 
 def get_tam_info() -> tuple[int, ...]:
-    return data['message']['needed_msg'], data['message']['ref_msg'], data['ticket']['per_msg'], data['ticket']['ref_msg']
+    return data['message']['needed_msg'], data['message']['ref_msg'], data['ticket']['per_msg'], data['ticket'][
+        'ref_msg']
 
+def add_chat(chat_id: int) -> bool:
+    if chat_id in data['chan_id']:
+        return False
+    else:
+        data['chan_id'].append(chat_id)
+        dump()
+        return True
+
+def remove_chat(chat_id: int) -> bool:
+    if chat_id not in data['chan_id']:
+        return False
+    else:
+        data['chan_id'].remove(chat_id)
+        dump()
+        return True
 
 if not os.path.exists('config.json'):
     create()

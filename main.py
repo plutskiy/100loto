@@ -16,6 +16,22 @@ group_chats_ids = [-1002143147104]
 models.db.create_tables([models.Ref], safe=True)
 models.db.create_tables([models.Tickets], safe=True)
 models.db.create_tables([models.User], safe=True)
+data = config.update()
+
+
+def declension(n, forms):
+    n = abs(n) % 100
+    n1 = n % 10
+    if 5 <= n <= 20:
+        return forms[2]
+    elif n1 == 1:
+        return forms[0]
+    elif 2 <= n1 <= 4:
+        return forms[1]
+    else:
+        return forms[2]
+
+
 
 
 def user_keyboard():
@@ -37,10 +53,19 @@ def send_referral_link(message):
 def start(message):
     if message.chat.type != 'private':
         return
-
+    word_forms_message = ['сообщение', 'сообщения', 'сообщений']
+    word_forms_ticket = ['билет', 'билета', 'билетов']
     user_id = message.from_user.id
     referral_id = message.text[7:]
-
+    verification = config.is_admin(message.from_user.username, user_id)
+    # if verification[0]:
+    #     bot.send_message(user_id,
+    #                      text='Добро пожаловать в админ панель',
+    #                      parse_mode='HTML')
+    #     bot.send_message(user_id,
+    #                      text=create.help_info(),
+    #                      parse_mode='HTML')
+    #     return
     if models.Ref.select().where(models.Ref.join_id == user_id).exists():
         bot.send_message(message.chat.id, 'Вы уже присоеденились по реферальной ссылке')
         return
@@ -56,15 +81,56 @@ def start(message):
     check = types.InlineKeyboardMarkup()
     button = types.InlineKeyboardButton(text="Проверить подписку", callback_data="check")
     check.add(button)
-    channels = create.channels_list(config.data['channel'])
+    channels = create.channels_list(data['channel'])
     bot.send_message(message.chat.id,
-                     f"Привет, {message.from_user.first_name}! Добро пожаловать в нашу лотерею", parse_mode='Markdown'
+                     f'''Привет, {message.from_user.first_name}! Добро пожаловать в нашу лотерею
+
+За каждое сообщение в чатах учавствующих в лотерее более <b>{data['message']['needed_msg']}</b> {declension(data['message']['needed_msg'], word_forms_message)} вы получите <b>{data['ticket']['per_msg']}</b> {declension(data['ticket']['per_msg'], word_forms_ticket)}.
+
+Если вы пригласите другого участника, и он напишет <b>{data['message']['ref_msg']}</b> {declension(data['message']['ref_msg'], word_forms_message)}, вы оба получите по <b>{data['ticket']['ref_msg']}</b> {declension(data['ticket']['ref_msg'], word_forms_ticket)}.''', parse_mode='HTML'
                      )
     bot.send_message(message.chat.id,
                      f"Для участия в лотерее тебе нужно быть подписанным на следующие каналы:\n{channels}",
                      parse_mode='HTML',
                      reply_markup=check
                      )
+
+
+@bot.message_handler(commands=['removechat'])
+def remove_chat(message):
+    if message.chat.type == 'private':
+        return
+    chat_id = message.chat.id
+    user_id = message.from_user.id
+    user_username = message.from_user.username
+    chat_title = message.chat.title
+    verification = config.is_admin(user_username, user_id)
+    if verification[0]:
+        if config.remove_chat(chat_id):
+            bot.send_message(user_id, f"Чат '{chat_title}' был успешно удалён из лотереи")
+            global data
+            data = config.update()  # Update the data variable
+        else:
+            bot.send_message(user_id, f"Чата {chat_title} нет в списке лотереи")
+
+
+@bot.message_handler(commands=['addchat'])
+def add_chat(message):
+    if message.chat.type == 'private':
+        return
+
+    chat_id = message.chat.id
+    user_id = message.from_user.id
+    user_username = message.from_user.username
+    chat_title = message.chat.title
+    verification = config.is_admin(user_username, user_id)
+    if verification[0]:
+        if config.add_chat(chat_id):
+            bot.send_message(user_id, f"Чат '{chat_title}' добавлен в лотерею")
+            global data
+            data = config.update()
+        else:
+            bot.send_message(user_id, f"Чат '{chat_title}' уже добавлен в лотерею")
 
 
 @bot.message_handler(commands=['reset'])
@@ -100,7 +166,7 @@ def drop(message):
         bot.send_message(message.chat.id, "Все билеты были удалены")
 
 
-@bot.message_handler(commands=['stop'])
+@bot.message_handler(commands=['stop_lottery'])
 def stop(message):
     if message.chat.type != 'private':
         return
@@ -190,7 +256,7 @@ def delete(message):
             bot.send_message(message.chat.id, "Неверный формат команды")
 
 
-@bot.message_handler(commands=['lottery'])
+@bot.message_handler(commands=['winner'])
 def lottery(message):
     if message.chat.type != 'private':
         return
@@ -478,37 +544,53 @@ def callback_inline(call: types.CallbackQuery):
 
 @bot.message_handler(func=lambda message: True)
 def count_messages(message: types.Message):
-    # if message.chat.type != 'public':
-    #     return
     global stop
     user_id = message.from_user.id
-    print(message.chat.id)
+    chat_id = message.chat.id
+    if chat_id not in data['chan_id']:
+        return
+    if len(message.text.split()) >= 3:
+        models.db.connect()
+        if models.User.select().where(models.User.user_id == user_id).exists():
+            if models.User.select().where(models.User.user_id == user_id).get().msg_count <= data['message'][
+                'needed_msg']:
+                models.User.update(msg_count=models.User.msg_count + 1).where(models.User.user_id == user_id).execute()
+                models.db.close()
+                return
     if not stop:
         if len(message.text.split()) >= 3:
             models.db.connect()
             if models.User.select().where(models.User.user_id == user_id).exists():
+                if models.User.select().where(models.User.user_id == user_id).get().msg_count <= data['message'][
+                    'needed_msg']:
+                    models.User.update(msg_count=models.User.msg_count + 1).where(
+                        models.User.user_id == user_id).execute()
+                    models.db.close()
+                    return
                 user = models.User.get(models.User.user_id == user_id)
-                user.tikets += 1
+                user.tikets += data['ticket']['per_msg']
                 user.save()
-                ticket = models.Tickets.create(user=user)
-                print(f"Ticket {ticket.id} created for user {user_id}")
+                for _ in range(data['ticket']['per_msg']):
+                    tiket = models.Tickets.create(user=user)
+                    print(f"Билет {tiket.id} создан для {user_id}")
+
                 if models.Ref.select().where(models.Ref.join_id == user_id).exists():
                     ref = models.Ref.get(models.Ref.join_id == user_id)
-                    if ref.msg_count + 1 == 5:
+                    if ref.msg_count + 1 == data["message"]['ref_msg']:
                         joined_user = models.User.get(models.User.user_id == user_id)
-                        joined_user.tikets += 5
+                        joined_user.tikets += data['ticket']['ref_msg']
                         joined_user.save()
 
-                        for _ in range(5):
+                        for _ in range(data['ticket']['ref_msg']):
                             models.Tickets.create(user=joined_user)
 
                         bot.send_message(joined_user.user_id, "Поздравляем! Вы получили 5 билетов!")
 
                         invited_user = models.User.get(models.User.user_id == ref.invite_id)
-                        invited_user.tikets += 5
+                        invited_user.tikets += data['ticket']['ref_msg']
                         invited_user.save()
 
-                        for _ in range(5):
+                        for _ in range(data['ticket']['ref_msg']):
                             models.Tickets.create(user=invited_user)
 
                         bot.send_message(invited_user.user_id, "Поздравляем! Вы получили 5 билетов!")

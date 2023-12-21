@@ -9,6 +9,7 @@ class User(Model):
     nickname = CharField(unique=True)
     tikets = IntegerField(default=0)
     archieved = BooleanField(default=False)
+    msg_count = IntegerField(default=0)
 
     class Meta:
         database = SqliteDatabase('users.sqlite')
