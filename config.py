@@ -6,7 +6,8 @@ def create():
     tmp_data = {'admin': [],
                 'channel': {},
                 'ticket': {},
-                'message': {}}
+                'message': {},
+                'chan_id': []}
 
     tmp_data['admin'].append({
         'username': 'pluton4ick',

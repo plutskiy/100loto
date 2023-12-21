@@ -8,6 +8,23 @@ import create
 import check
 import config
 import models
+import threading
+import schedule
+import time
+from backup import backup_db  # предполагается, что функция backup_db находится в файле backup.py
+
+def job():
+    backup_db("users")
+
+def run_schedule():
+    while True:
+        schedule.run_pending()
+        time.sleep(1)
+
+schedule.every(1).hour.do(job)
+
+schedule_thread = threading.Thread(target=run_schedule)
+schedule_thread.start()
 
 TOKEN = '5973304457:AAHGtaBx2VladoA7yt1S5H3IV7KDJoVD7z4'
 bot = telebot.TeleBot(TOKEN)
@@ -517,7 +534,6 @@ def addChannel(message: types.Message):
     user_username = message.from_user.username
     verification = config.is_admin(user_username, user_id)
     # if verification[0] and verification[3]:
-
 
 
 @bot.callback_query_handler(func=lambda call: True)
